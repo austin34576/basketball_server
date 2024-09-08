@@ -27,4 +27,6 @@ def start_model(video_path,user_id):
   process(video_path)
 
 if __name__ == '__main__':
-  app.run(host='0.0.0.0')
+  #app.run(host='0.0.0.0')
+  thread = threading.Thread(target=start_model , args=("./assets/basketball.mp4",0))
+  thread.start()
