@@ -2,10 +2,11 @@ from flask import Flask, jsonify ,request
 from flask_cors import CORS
 from basketball_analyzer import process
 import threading
+from store_manager import Database
 
 app = Flask(__name__)
 CORS(app)
-
+db = Database()
 @app.route("/")
 def webpage():
   return jsonify({"name" : "hello"})
@@ -23,8 +24,11 @@ def analyze():
   thread = threading.Thread(target=start_model , args=(video_path,user_id))
   thread.start()
   return jsonify({"message" : "video process started"})
+
 def start_model(video_path,user_id):
   process(video_path)
+  db()
+  
 
 if __name__ == '__main__':
   #app.run(host='0.0.0.0')
