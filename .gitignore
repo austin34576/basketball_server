@@ -3,3 +3,4 @@ assets/
 tutorial/
 __pycache__/
 runs/
+output/

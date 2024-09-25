@@ -16,7 +16,7 @@ class Database:
          print('test')
     
     def update_firestore(self, collection:str, userid:str, data:dict):
-        collection = self.db_collection(collection)
+        collection = self.db.collection(collection)
         doc = collection.document(userid)
         doc.set(data, merge=True)
 

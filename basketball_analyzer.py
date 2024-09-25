@@ -40,8 +40,8 @@ def detect_object(image):
 # Resize image (to speed up the model)
 def resize_image(image):
     h,w,_ = image.shape
-    w = w//3
-    h = h//3
+    w = w//2
+    h = h//2
     image = cv2.resize(image,(w,h))
     return image,w,h
 
@@ -140,16 +140,4 @@ def process(video_path, db):
 
     url = db.upload_file(output_path,output_path)
     print(url)
-    return url
-
-db = Database()
-process("assets/video1.mp4", db)
-
-
-
-
-
-
-	
-
-
+    return {"url": url,"score":score,"left":left,"right":right}
