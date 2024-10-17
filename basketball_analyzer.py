@@ -23,6 +23,7 @@ def detect_object(image):
     result = model(image)
     annotator = Annotator(image)
     made = False
+    shoot = False
     player_centers = []
     for r in result:
         boxes = r.boxes
@@ -32,16 +33,18 @@ def detect_object(image):
             if class_name == "made":
                 made = True
             if class_name == "shoot" or class_name == "person":
+                if class_name == "shoot":
+                    shoot = True
                 center = int((box_coords[0] + box_coords[2])/2)
                 player_centers.append(center)
             annotator.box_label(box_coords,class_name,class_colors[class_name])
     image = annotator.result()
-    return image,made,player_centers
+    return image,made,player_centers,shoot
 # Resize image (to speed up the model)
 def resize_image(image):
     h,w,_ = image.shape
-    w = w//2
-    h = h//2
+    w = w//1
+    h = h//1
     image = cv2.resize(image,(w,h))
     return image,w,h
 
@@ -88,11 +91,12 @@ def put_text(image, text, org):
 
 
 # Get the stats and put it on the image
-def write_scores(image, score,left,right):
+def write_scores(image, score,left,right,miss):
     image = put_text(image, "total score" + str(score), (20,20)) # Total score
     image = put_text(image, "right score" + str(right), (440,20)) # Total score
     image = put_text(image, "left score" + str(left), (250,20)) # Total score
-
+    image = put_text(image, "left miss" + str(miss[0]), (20,100))
+    image = put_text(image, "right miss" + str(miss[1]), (20,150))
     return image
 
 
@@ -104,30 +108,51 @@ def update_score(score,player_centers,w,left,right):
     else:
         right += 1
     return score,left,right
+
+def update_miss(miss,player_centers,w):
+    if player_centers[0] <= w//2:
+        miss[0] += 1
+    else:
+        miss[1] += 1
+    return miss
     
-def process(video_path, db):
+def process(video_path, db, user_id):
     cap = cv2.VideoCapture(video_path)
     width,height,out,output_path = setup_video_tool(cap,video_path)
     score = 0
     right = 0
     left = 0
+    miss = [0,0]
     frams_pass = 0
-    max_time = 100
+    shoot_frame = 0
+    shoot_time = 80
+    max_time = 20
+    total_frame = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    progress_frame = 0
     while True:
         ret, frame = cap.read()
         if ret:
             image,w,h = resize_image(frame)
-            image,made,player_centers = detect_object(image)
-            if made and frams_pass >= max_time:
-                frams_pass =0
-                score,left,right = update_score(score,player_centers,w,left,right)
+            image,made,player_centers,shoot = detect_object(image)
+            if shoot_frame >= shoot_time:
+                miss = update_miss(miss,player_centers,w)
+                shoot_frame = 0
+            elif shoot or shoot_frame > 0:
+                shoot_frame +=1
+            if made:
+                shoot_frame = 0
+                if frams_pass >= max_time:
+                    frams_pass = 0
+                    score,left,right = update_score(score,player_centers,w,left,right)
             else:
                 frams_pass += 1
-                
+            progress_frame += 1
+
+            
+            db.update_firestore("basketball", user_id , data={'progress': int(progress_frame/ total_frame * 100) })
 
 
-            image = write_scores(image,score,left,right)
-
+            image = write_scores(image,score,left,right,miss)
             # TODO: IMPORTANT: This fixes the video corrupted error, you need to resize video to the original size using resize_original()
             image = resize_original(image,width,height)
 
@@ -140,4 +165,4 @@ def process(video_path, db):
 
     url = db.upload_file(output_path,output_path)
     print(url)
-    return {"url": url,"score":score,"left":left,"right":right}
+    return {"url": url,"score":score,"left":left,"right":right,"miss":miss}

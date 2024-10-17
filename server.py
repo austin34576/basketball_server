@@ -4,6 +4,7 @@ from basketball_analyzer import process
 import threading
 from store_manager import Database
 import time 
+import os
 
 app = Flask(__name__)
 CORS(app)
@@ -29,7 +30,7 @@ def analyze():
   return jsonify({"message" : "video process started"})
 
 def start_model(video_path,user_id):
-  data = process(video_path, db)
+  data = process(video_path, db,user_id)
   timestamp = time.time()
 
   if os.path.isfile(video_path):
@@ -41,5 +42,6 @@ if __name__ == '__main__':
   app.run(host='0.0.0.0')
   # thread = threading.Thread(target=start_model , args=("./assets/basketball.mp4",0))
   # thread.start()
+
 
 
