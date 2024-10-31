@@ -6,6 +6,7 @@ from ultralytics.utils.plotting import Annotator
 import os
 from pathlib import Path
 from store_manager import Database
+import imageio
 
     # Define color mapping for each class recognized in the basketball analysis
 class_colors = {
@@ -43,8 +44,8 @@ def detect_object(image):
 # Resize image (to speed up the model)
 def resize_image(image):
     h,w,_ = image.shape
-    w = w//1
-    h = h//1
+    w = w//2
+    h = h//2
     image = cv2.resize(image,(w,h))
     return image,w,h
 
@@ -56,6 +57,7 @@ def make_directory(name: str):
 # Create the output video
 def setup_video_tool(cap, video_path):
     make_directory("output")
+    make_directory("image")
     # Get the video frame dimensions
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -85,10 +87,7 @@ def put_text(image, text, org):
     # Add the text to the image
     image = cv2.putText(image, text, org, font, font_scale, color, thickness, cv2.LINE_AA)
     return image
-
-
-
-
+    
 
 # Get the stats and put it on the image
 def write_scores(image, score,left,right,miss):
@@ -115,35 +114,59 @@ def update_miss(miss,player_centers,w):
     else:
         miss[1] += 1
     return miss
-    
+
+def snapshot(made,current_time, images, video_path, db):
+    imageio.mimsave(f"output/output.gif",images, loop=0, duration=1)
+    url = db.upload_file(f"output/{Path(video_path).stem}{current_time}.gif",f"output/output.gif")
+    return {
+        "made" : made,
+        "url" : url,
+        "time" : current_time
+    }
+
 def process(video_path, db, user_id):
+    db.update_firestore("basketball", user_id , data={'progress': int(0) })
     cap = cv2.VideoCapture(video_path)
     width,height,out,output_path = setup_video_tool(cap,video_path)
+    snapshots = [] # List of each of the made/missed images
+    images = []
+
     score = 0
     right = 0
     left = 0
     miss = [0,0]
+
     frams_pass = 0
     shoot_frame = 0
     shoot_time = 80
     max_time = 20
     total_frame = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     progress_frame = 0
+
+
     while True:
         ret, frame = cap.read()
         if ret:
+            current_time = cap.get(cv2.CAP_PROP_POS_MSEC)
             image,w,h = resize_image(frame)
             image,made,player_centers,shoot = detect_object(image)
             if shoot_frame >= shoot_time:
                 miss = update_miss(miss,player_centers,w)
+                snapshots.append(snapshot(False,current_time,images, video_path, db))
+                images = []
                 shoot_frame = 0
             elif shoot or shoot_frame > 0:
+                if shoot:
+                    cv2.imwrite(f"image/image_{progress_frame}.png",frame)
+                    images.append(frame)
                 shoot_frame +=1
             if made:
                 shoot_frame = 0
                 if frams_pass >= max_time:
                     frams_pass = 0
                     score,left,right = update_score(score,player_centers,w,left,right)
+                    snapshots.append(snapshot(True,current_time,images, video_path, db))
+                    images = []
             else:
                 frams_pass += 1
             progress_frame += 1
@@ -163,6 +186,8 @@ def process(video_path, db, user_id):
     cap.release()
     out.release()
 
-    url = db.upload_file(output_path,output_path)
+    url = db.upload_file(output_path,output_path) # Model video
+    org_url = db.upload_file(f"assets/{video_path}",video_path) # original video
     print(url)
-    return {"url": url,"score":score,"left":left,"right":right,"miss":miss}
+    print(org_url)
+    return {"url": url, "org_url":org_url, "score":score,"left":left,"right":right,"miss":miss, "snapshots": snapshots}

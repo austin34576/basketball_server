@@ -33,6 +33,7 @@ def start_model(video_path,user_id):
   data = process(video_path, db,user_id)
   timestamp = time.time()
 
+  # Delete original video to save space on computer
   if os.path.isfile(video_path):
     os.remove(video_path)
 
