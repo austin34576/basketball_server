@@ -26,11 +26,12 @@ def detect_object(image):
     made = False
     shoot = False
     player_centers = []
+    ball_centers = []
     for r in result:
         boxes = r.boxes
         for box in boxes:
             class_name = model.names[int(box.cls)]
-            box_coords = box.xyxy[0]
+            box_coords = box.xyxy[0] # get box coords in (left, top, right, bottom) format
             if class_name == "made":
                 made = True
             if class_name == "shoot" or class_name == "person":
@@ -38,9 +39,15 @@ def detect_object(image):
                     shoot = True
                 center = int((box_coords[0] + box_coords[2])/2)
                 player_centers.append(center)
-            annotator.box_label(box_coords,class_name,class_colors[class_name])
-    image = annotator.result()
-    return image,made,player_centers,shoot
+            if class_name == "ball":
+                x_center = int((box_coords[0] + box_coords[2])/2)
+                y_center = int((box_coords[1] + box_coords[3])/2)
+                ball_centers.append([x_center, y_center])
+
+            # annotator.box_label(box_coords,class_name,class_colors[class_name])
+
+    # image = annotator.result()
+    return image,made,player_centers,shoot, ball_centers
 # Resize image (to speed up the model)
 def resize_image(image):
     h,w,_ = image.shape
@@ -91,11 +98,11 @@ def put_text(image, text, org):
 
 # Get the stats and put it on the image
 def write_scores(image, score,left,right,miss):
-    image = put_text(image, "total score" + str(score), (20,20)) # Total score
-    image = put_text(image, "right score" + str(right), (440,20)) # Total score
-    image = put_text(image, "left score" + str(left), (250,20)) # Total score
-    image = put_text(image, "left miss" + str(miss[0]), (20,100))
-    image = put_text(image, "right miss" + str(miss[1]), (20,150))
+    # image = put_text(image, "total score" + str(score), (20,20)) # Total score
+    # image = put_text(image, "right score" + str(right), (440,20)) # Total score
+    # image = put_text(image, "left score" + str(left), (250,20)) # Total score
+    # image = put_text(image, "left miss" + str(miss[0]), (20,100))
+    # image = put_text(image, "right miss" + str(miss[1]), (20,150))
     return image
 
 
@@ -109,14 +116,18 @@ def update_score(score,player_centers,w,left,right):
     return score,left,right
 
 def update_miss(miss,player_centers,w):
-    if player_centers[0] <= w//2:
-        miss[0] += 1
-    else:
-        miss[1] += 1
+    if player_centers:
+        if player_centers[0] <= w//2:
+            miss[0] += 1
+        else:
+            miss[1] += 1
     return miss
 
 def snapshot(made,current_time, images, video_path, db):
-    imageio.mimsave(f"output/output.gif",images, loop=0, duration=1)
+    imageio.mimsave(f"output/output.gif",images, loop=0, duration=10)
+    #print(type(images[0]))
+    #gif = Image.open(images[0])
+    #gif.save("output/output.gif", save_all=True, append_images=images[1:], duration=1000, loop=0)
     url = db.upload_file(f"output/{Path(video_path).stem}{current_time}.gif",f"output/output.gif")
     return {
         "made" : made,
@@ -130,6 +141,7 @@ def process(video_path, db, user_id):
     width,height,out,output_path = setup_video_tool(cap,video_path)
     snapshots = [] # List of each of the made/missed images
     images = []
+    trail = []
 
     score = 0
     right = 0
@@ -149,16 +161,20 @@ def process(video_path, db, user_id):
         if ret:
             current_time = cap.get(cv2.CAP_PROP_POS_MSEC)
             image,w,h = resize_image(frame)
-            image,made,player_centers,shoot = detect_object(image)
+            image,made,player_centers,shoot,ball_centers = detect_object(image)
             if shoot_frame >= shoot_time:
                 miss = update_miss(miss,player_centers,w)
                 snapshots.append(snapshot(False,current_time,images, video_path, db))
                 images = []
+                trail = []
                 shoot_frame = 0
             elif shoot or shoot_frame > 0:
-                if shoot:
-                    cv2.imwrite(f"image/image_{progress_frame}.png",frame)
-                    images.append(frame)
+                if ball_centers:
+                    trail.append([ball_centers[0][0], ball_centers[0][1]])
+                    for dot in trail:
+                        cv2.circle(image,(dot[0], dot[1]), radius = 3, color = (0, 255, 0), thickness = -1)
+                cv2.imwrite(f"image/image_{progress_frame}.png",image)
+                images.append(image)
                 shoot_frame +=1
             if made:
                 shoot_frame = 0
@@ -167,6 +183,7 @@ def process(video_path, db, user_id):
                     score,left,right = update_score(score,player_centers,w,left,right)
                     snapshots.append(snapshot(True,current_time,images, video_path, db))
                     images = []
+                    trail = []
             else:
                 frams_pass += 1
             progress_frame += 1
