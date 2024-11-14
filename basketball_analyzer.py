@@ -171,9 +171,8 @@ def process(video_path, db, user_id):
             elif shoot or shoot_frame > 0:
                 if ball_centers:
                     trail.append([ball_centers[0][0], ball_centers[0][1]])
-                    for dot in trail:
-                        cv2.circle(image,(dot[0], dot[1]), radius = 3, color = (0, 255, 0), thickness = -1)
-                cv2.imwrite(f"image/image_{progress_frame}.png",image)
+                for dot in trail:
+                    cv2.circle(image,(dot[0], dot[1]), radius = 3, color = (0, 255, 0), thickness = -1)
                 images.append(image)
                 shoot_frame +=1
             if made:
