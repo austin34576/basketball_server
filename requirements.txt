@@ -1,0 +1,7 @@
+opencv-python
+pillow
+imageio
+ultralytics
+flask_cors
+flask
+firebase_admin
