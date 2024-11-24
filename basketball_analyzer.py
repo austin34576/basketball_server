@@ -68,7 +68,7 @@ def setup_video_tool(cap, video_path):
     # Get the video frame dimensions
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps = 20
+    fps = 30
     output_path = f"output/{Path(video_path).stem}.mp4"
     out = cv2.VideoWriter(output_path, cv2.VideoWriter_fourcc('m', 'p', '4', 'v'), int(fps), (int(width), int(height)))
     return width,height,out,output_path
@@ -162,6 +162,17 @@ def process(video_path, db, user_id):
             current_time = cap.get(cv2.CAP_PROP_POS_MSEC)
             image,w,h = resize_image(frame)
             image,made,player_centers,shoot,ball_centers = detect_object(image)
+            if made:
+                shoot_frame = 0
+                if frams_pass >= max_time:
+                    frams_pass = 0
+                    score,left,right = update_score(score,player_centers,w,left,right)
+                    if images:
+                        snapshots.append(snapshot(True,current_time,images, video_path, db))
+                    images = []
+                    trail = []
+            else:
+                frams_pass += 1
             if shoot_frame >= shoot_time:
                 miss = update_miss(miss,player_centers,w)
                 snapshots.append(snapshot(False,current_time,images, video_path, db))
@@ -175,16 +186,6 @@ def process(video_path, db, user_id):
                     cv2.circle(image,(dot[0], dot[1]), radius = 3, color = (0, 255, 0), thickness = -1)
                 images.append(image)
                 shoot_frame +=1
-            if made:
-                shoot_frame = 0
-                if frams_pass >= max_time:
-                    frams_pass = 0
-                    score,left,right = update_score(score,player_centers,w,left,right)
-                    snapshots.append(snapshot(True,current_time,images, video_path, db))
-                    images = []
-                    trail = []
-            else:
-                frams_pass += 1
             progress_frame += 1
 
             
